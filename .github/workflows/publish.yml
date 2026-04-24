@@ -1,0 +1,75 @@
+name: Publish NuGet
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (e.g. 0.1.0). Leave empty to use csproj version.'
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+
+      - name: Setup Node.js (Studio client)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Derive version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore
+        run: dotnet restore Hivesharp.slnx
+
+      - name: Build
+        run: dotnet build Hivesharp.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test Hivesharp.slnx -c Release --no-build
+
+      - name: Pack
+        run: |
+          if [ -n "${{ steps.version.outputs.version }}" ]; then
+            dotnet pack Hivesharp.slnx -c Release --no-build --output artifacts /p:Version=${{ steps.version.outputs.version }}
+          else
+            dotnet pack Hivesharp.slnx -c Release --no-build --output artifacts
+          fi
+
+      - name: Push to GitHub Packages
+        env:
+          NUGET_SOURCE: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
+        run: |
+          dotnet nuget push "artifacts/*.nupkg" \
+            --source "$NUGET_SOURCE" \
+            --api-key "${{ secrets.GITHUB_TOKEN }}" \
+            --skip-duplicate
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: artifacts/*.nupkg

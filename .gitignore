@@ -1,0 +1,57 @@
+# Build output
+bin/
+obj/
+artifacts/
+out/
+publish/
+TestResults/
+*.nupkg
+*.snupkg
+
+# NuGet caches
+packages/
+*.nuget.props
+*.nuget.targets
+
+# IDEs
+.idea/
+.vs/
+.vscode/*
+!.vscode/extensions.json
+*.user
+*.suo
+*.ntvs*
+*.njsproj
+*.sw?
+*.DotSettings.user
+riderModule.iml
+_ReSharper.Caches/
+
+# Node (Studio client)
+node_modules/
+dist/
+dist-ssr/
+**/wwwroot/
+*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets / local settings
+.env
+appsettings.Development.json
+appsettings.Local.json
+appsettings.*.user.json
+
+#AI tools
+CLAUDE.md
