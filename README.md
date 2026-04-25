@@ -132,6 +132,13 @@ builder.Services.AddHivesharpMcpHttpServer(o =>
 app.MapHivesharpMcpServer("/mcp");
 ```
 
+## Samples
+
+Ready-to-run examples live in a separate repository:
+[**github.com/Hivesharp/Hivesharp-Samples**](https://github.com/Hivesharp/Hivesharp-Samples)
+
+The samples repo covers common scenarios (tool calling, RAG, workflows, MCP integration, Studio setup) and is kept in sync with the latest alpha release.
+
 ## Requirements
 
 - .NET 10.0 SDK
