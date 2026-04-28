@@ -1,7 +1,9 @@
 using System.IO.Pipes;
 using Hivesharp.Abstractions.Agent;
+using Hivesharp.Diagnostics;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
@@ -10,6 +12,7 @@ namespace Hivesharp.Mcp;
 internal sealed class McpToolResolver(ILoggerFactory? loggerFactory = null) : IMcpToolResolver
 {
     private readonly List<McpClient> _clients = [];
+    private readonly ILogger _logger = loggerFactory?.CreateLogger<McpToolResolver>() ?? NullLogger<McpToolResolver>.Instance;
 
     public async Task<McpToolResolutionResult> ResolveToolsAsync(
         IReadOnlyList<McpServerDefinition> servers,
@@ -20,6 +23,8 @@ internal sealed class McpToolResolver(ILoggerFactory? loggerFactory = null) : IM
 
         foreach (var server in servers)
         {
+            var transportType = server.PipeName is not null ? "pipe" : "http";
+            McpLog.ConnectStarted(_logger, server.Name, transportType);
             try
             {
                 var transport = await CreateTransportAsync(server, cancellationToken);
@@ -37,6 +42,7 @@ internal sealed class McpToolResolver(ILoggerFactory? loggerFactory = null) : IM
                     toolNames.Add(namespacedName);
                 }
 
+                McpLog.ConnectCompleted(_logger, server.Name, toolNames.Count);
                 statuses.Add(new McpServerStatus(
                     Name: server.Name,
                     IsAvailable: true,
@@ -45,6 +51,7 @@ internal sealed class McpToolResolver(ILoggerFactory? loggerFactory = null) : IM
             }
             catch (Exception ex)
             {
+                McpLog.ConnectFailed(_logger, ex, server.Name, ex.Message);
                 statuses.Add(new McpServerStatus(
                     Name: server.Name,
                     IsAvailable: false,
@@ -60,6 +67,7 @@ internal sealed class McpToolResolver(ILoggerFactory? loggerFactory = null) : IM
     {
         if (server.HttpEndpoint is not null)
         {
+            McpLog.TransportCreated(_logger, server.Name, "http");
             return new HttpClientTransport(new HttpClientTransportOptions
             {
                 Name = server.Name,
@@ -69,6 +77,7 @@ internal sealed class McpToolResolver(ILoggerFactory? loggerFactory = null) : IM
 
         if (server.PipeName is not null)
         {
+            McpLog.TransportCreated(_logger, server.Name, "pipe");
             var pipe = new NamedPipeClientStream(".", server.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
             using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             connectCts.CancelAfter(TimeSpan.FromSeconds(5));
@@ -78,6 +87,7 @@ internal sealed class McpToolResolver(ILoggerFactory? loggerFactory = null) : IM
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
+                McpLog.PipeConnectTimedOut(_logger, server.Name, server.PipeName);
                 throw new TimeoutException($"Timed out connecting to named pipe '{server.PipeName}'.");
             }
             return new StreamClientTransport(pipe, pipe, loggerFactory);

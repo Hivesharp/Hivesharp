@@ -1,4 +1,8 @@
+using System.Diagnostics;
+using Hivesharp.Diagnostics;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Hivesharp.Agent;
 
@@ -13,28 +17,43 @@ namespace Hivesharp.Agent;
 internal sealed class TimeoutFunctionInvokingChatClient : FunctionInvokingChatClient
 {
     private readonly TimeSpan _toolTimeout;
+    private readonly ILogger _logger;
 
-    public TimeoutFunctionInvokingChatClient(IChatClient inner, int maxIterations, TimeSpan toolTimeout)
+    public TimeoutFunctionInvokingChatClient(IChatClient inner, int maxIterations, TimeSpan toolTimeout, ILogger? logger = null)
         : base(inner)
     {
         MaximumIterationsPerRequest = maxIterations;
         _toolTimeout = toolTimeout;
+        _logger = logger ?? NullLogger.Instance;
     }
 
     protected override async ValueTask<object?> InvokeFunctionAsync(
         FunctionInvocationContext context,
         CancellationToken cancellationToken)
     {
+        var toolName = context.CallContent.Name;
+        var timeoutSec = (int)_toolTimeout.TotalSeconds;
+        AgentLog.ToolInvocationStarted(_logger, toolName, timeoutSec);
+
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(_toolTimeout);
+        var sw = Stopwatch.StartNew();
         try
         {
-            return await base.InvokeFunctionAsync(context, cts.Token);
+            var result = await base.InvokeFunctionAsync(context, cts.Token);
+            sw.Stop();
+            AgentLog.ToolInvocationCompleted(_logger, toolName, sw.ElapsedMilliseconds);
+            return result;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            var toolName = context.CallContent.Name;
-            return $"[Tool '{toolName}' timed out after {(int)_toolTimeout.TotalSeconds}s. The service may be unavailable or slow. Inform the user and proceed without that tool result.]";
+            AgentLog.ToolInvocationTimedOut(_logger, toolName, timeoutSec);
+            return $"[Tool '{toolName}' timed out after {timeoutSec}s. The service may be unavailable or slow. Inform the user and proceed without that tool result.]";
+        }
+        catch (Exception ex)
+        {
+            AgentLog.ToolInvocationFailed(_logger, ex, toolName);
+            throw;
         }
     }
 }

@@ -1,6 +1,7 @@
 ﻿using Hivesharp.Abstractions.Rag;
 using Hivesharp.Rag;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 
 // ReSharper disable once CheckNamespace
 namespace Microsoft.Extensions.DependencyInjection;
@@ -53,7 +54,9 @@ public static class RagServiceCollectionExtension
             var builder = new RagPipelineBuilder(sp);
             configure(builder);
             var (vectorStore, embedder, chunkingStrategy, indexName, dimensions, chunkSize, chunkOverlap) = builder.Build();
-            return new RagPipeline(vectorStore, embedder, chunkingStrategy, indexName, dimensions, chunkSize, chunkOverlap);
+            var loggerFactory = sp.GetService<ILoggerFactory>();
+            var logger = loggerFactory?.CreateLogger<RagPipeline>();
+            return new RagPipeline(vectorStore, embedder, chunkingStrategy, indexName, dimensions, chunkSize, chunkOverlap, logger);
         });
         return services;
     }

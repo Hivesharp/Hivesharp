@@ -1,8 +1,12 @@
+using System.Diagnostics;
 using Hivesharp.Abstractions.Agent;
 using Hivesharp.Abstractions.Memory;
+using Hivesharp.Diagnostics;
 using Hivesharp.Memory;
 using Hivesharp.Mcp;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Hivesharp.Agent;
 
@@ -12,8 +16,11 @@ internal class Agent(
     IChatClient chatClient,
     MemoryConfiguration? memory = null,
     IReadOnlyList<McpServerDefinition>? mcpServers = null,
-    IMcpToolResolver? mcpToolResolver = null) : IAgent
+    IMcpToolResolver? mcpToolResolver = null,
+    ILogger<Agent>? logger = null) : IAgent
 {
+    private readonly ILogger _logger = logger ?? NullLogger<Agent>.Instance;
+
     public AgentDescriptor AgentDescriptor { get; } = agentDescriptor;
     public MemoryConfiguration? Memory { get; } = memory;
 
@@ -103,6 +110,8 @@ internal class Agent(
         var toRetry = mcpServers.Where(s => failedNames.Contains(s.Name)).ToList();
         if (toRetry.Count == 0) return;
 
+        McpLog.RetryAttempted(_logger, toRetry.Count);
+
         await _mcpLock.WaitAsync(cancellationToken);
         try
         {
@@ -116,6 +125,8 @@ internal class Agent(
             {
                 var idx = updated.FindIndex(s => s.Name == status.Name);
                 if (idx >= 0) updated[idx] = status;
+                if (!status.IsAvailable)
+                    McpLog.RetryFailed(_logger, status.Name);
             }
             _runtimeState = new AgentRuntimeState(updated, _runtimeState.LastInitializedAt);
         }
@@ -139,54 +150,88 @@ internal class Agent(
             threadId = thread.Id;
         }
 
-        var chatOptions = new ChatOptions
+        AgentLog.GenerateStarted(_logger, AgentDescriptor.Id, threadId, message.Length);
+        var sw = Stopwatch.StartNew();
+
+        try
         {
-            Instructions = BuildInstructions()
-        };
+            var chatOptions = new ChatOptions
+            {
+                Instructions = BuildInstructions()
+            };
 
-        await InjectWorkingMemoryAsync(threadId, chatOptions, cancellationToken);
-        ApplyTools(chatOptions);
+            await InjectWorkingMemoryAsync(threadId, chatOptions, cancellationToken);
+            ApplyTools(chatOptions);
 
-        var messages = await LoadMessageHistoryAsync(threadId, message, cancellationToken);
+            var messages = await LoadMessageHistoryAsync(threadId, message, cancellationToken);
 
-        if (cancellationToken.IsCancellationRequested)
-        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return new AgentResult
+                {
+                    Completion = string.Empty,
+                };
+            }
+            var response = await chatClient.GetResponseAsync(messages, chatOptions, cancellationToken);
+
+            var completionText = await FlushWorkingMemoryAsync(threadId, response.Text ?? string.Empty);
+            await PersistMessagesAsync(threadId, message, completionText);
+
+            sw.Stop();
+            AgentLog.GenerateCompleted(_logger, AgentDescriptor.Id, threadId,
+                response.Usage?.InputTokenCount ?? 0,
+                response.Usage?.OutputTokenCount ?? 0,
+                sw.ElapsedMilliseconds);
+
             return new AgentResult
             {
-                Completion = string.Empty,
+                Completion = completionText,
+                ThreadId = threadId,
+                Usage = response.Usage.MapUsage(),
+                ToolCalls = response.Messages.ExtractToolCalls()
             };
         }
-        var response = await chatClient.GetResponseAsync(messages, chatOptions, cancellationToken);
-
-        var completionText = await FlushWorkingMemoryAsync(threadId, response.Text ?? string.Empty);
-        await PersistMessagesAsync(threadId, message, completionText);
-
-        return new AgentResult
+        catch (Exception ex)
         {
-            Completion = completionText,
-            ThreadId = threadId,
-            Usage = response.Usage.MapUsage(),
-            ToolCalls = response.Messages.ExtractToolCalls()
-        };
+            AgentLog.GenerateFailed(_logger, ex, AgentDescriptor.Id);
+            throw;
+        }
     }
 
     private async Task<AgentResult> GenerateSimpleAsync(string message, CancellationToken cancellationToken = default)
     {
-        var options = new ChatOptions
+        AgentLog.SimpleGenerateStarted(_logger, AgentDescriptor.Id, message.Length);
+        var sw = Stopwatch.StartNew();
+
+        try
         {
-            Instructions = BuildInstructions()
-        };
+            var options = new ChatOptions
+            {
+                Instructions = BuildInstructions()
+            };
 
-        ApplyTools(options);
+            ApplyTools(options);
 
-        var response = await chatClient.GetResponseAsync(message, options, cancellationToken);
+            var response = await chatClient.GetResponseAsync(message, options, cancellationToken);
 
-        return new AgentResult
+            sw.Stop();
+            AgentLog.SimpleGenerateCompleted(_logger, AgentDescriptor.Id,
+                response.Usage?.InputTokenCount ?? 0,
+                response.Usage?.OutputTokenCount ?? 0,
+                sw.ElapsedMilliseconds);
+
+            return new AgentResult
+            {
+                Completion = response.Text ?? string.Empty,
+                Usage = response.Usage.MapUsage(),
+                ToolCalls = response.Messages.ExtractToolCalls()
+            };
+        }
+        catch (Exception ex)
         {
-            Completion = response.Text ?? string.Empty,
-            Usage = response.Usage.MapUsage(),
-            ToolCalls = response.Messages.ExtractToolCalls()
-        };
+            AgentLog.SimpleGenerateFailed(_logger, ex, AgentDescriptor.Id);
+            throw;
+        }
     }
 
     private void ApplyTools(ChatOptions options)
@@ -208,6 +253,7 @@ internal class Agent(
         var storage = Memory.WorkingMemory.ResolveStorage(Memory.Storage);
         var workingMem = await storage.GetWorkingMemoryAsync(threadId, cancellationToken);
         chatOptions.Instructions = WorkingMemoryProcessor.BuildInstructions(chatOptions.Instructions ?? "", workingMem, Memory.WorkingMemory);
+        AgentLog.WorkingMemoryInjected(_logger, threadId, !string.IsNullOrEmpty(workingMem));
     }
 
     private async Task<string> FlushWorkingMemoryAsync(string threadId, string completionText)
@@ -220,6 +266,7 @@ internal class Agent(
             var storage = Memory.WorkingMemory.ResolveStorage(Memory.Storage);
             await storage.SaveWorkingMemoryAsync(threadId, updatedMemory);
         }
+        AgentLog.WorkingMemoryFlushed(_logger, threadId, updatedMemory is not null);
         return cleanedText;
     }
 
@@ -230,6 +277,7 @@ internal class Agent(
         var messages = history
             .Select(m => new ChatMessage(new ChatRole(m.Role), m.Content))
             .ToList();
+        AgentLog.HistoryLoaded(_logger, messages.Count, threadId);
         messages.Add(new ChatMessage(ChatRole.User, message));
         return messages;
     }
@@ -242,5 +290,6 @@ internal class Agent(
             new MemoryMessage { Role = "user", Content = userMessage, CreatedAt = DateTimeOffset.UtcNow },
             new MemoryMessage { Role = "assistant", Content = assistantMessage, CreatedAt = DateTimeOffset.UtcNow }
         ]);
+        AgentLog.HistoryPersisted(_logger, 2, threadId);
     }
 }

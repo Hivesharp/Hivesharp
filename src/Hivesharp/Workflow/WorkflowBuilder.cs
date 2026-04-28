@@ -1,4 +1,5 @@
 using Hivesharp.Abstractions.Workflow;
+using Microsoft.Extensions.Logging;
 
 namespace Hivesharp.Workflow;
 
@@ -75,8 +76,10 @@ public class WorkflowBuilder
         };
 
         var runStore = serviceProvider?.GetService(typeof(IWorkflowRunStore)) as IWorkflowRunStore;
+        var loggerFactory = serviceProvider?.GetService(typeof(ILoggerFactory)) as ILoggerFactory;
+        var logger = loggerFactory?.CreateLogger<Workflow>();
 
-        return new Workflow(descriptor, _nodes, serviceProvider, runStore);
+        return new Workflow(descriptor, _nodes, serviceProvider, runStore, logger);
     }
 
     private (List<WorkflowNodeDescriptor>, List<WorkflowEdgeDescriptor>) BuildGraph()

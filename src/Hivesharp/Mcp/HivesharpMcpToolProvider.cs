@@ -1,13 +1,18 @@
+using System.Diagnostics;
 using Hivesharp.Abstractions.Hive;
+using Hivesharp.Diagnostics;
 using Hivesharp.Mcp.Options;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Server;
 
 namespace Hivesharp.Mcp;
 
 internal static class HivesharpMcpToolProvider
 {
-    public static IEnumerable<McpServerTool> CreateTools(IHive hive, HivesharpMcpServerOptions options)
+    public static IEnumerable<McpServerTool> CreateTools(IHive hive, HivesharpMcpServerOptions options, ILoggerFactory? loggerFactory = null)
     {
+        var logger = loggerFactory?.CreateLogger("Hivesharp.Mcp.ToolProvider") ?? NullLogger.Instance;
         var tools = new List<McpServerTool>();
 
         if (options.ExposeAgents)
@@ -20,8 +25,20 @@ internal static class HivesharpMcpToolProvider
                 tools.Add(McpServerTool.Create(
                     async (string message, CancellationToken cancellationToken) =>
                     {
-                        var result = await agent.GenerateAsync(message, null, cancellationToken);
-                        return result.Completion;
+                        McpLog.AgentToolStarted(logger, agentId);
+                        var sw = Stopwatch.StartNew();
+                        try
+                        {
+                            var result = await agent.GenerateAsync(message, null, cancellationToken);
+                            sw.Stop();
+                            McpLog.AgentToolCompleted(logger, agentId, sw.ElapsedMilliseconds);
+                            return result.Completion;
+                        }
+                        catch (Exception ex)
+                        {
+                            McpLog.AgentToolFailed(logger, ex, agentId);
+                            throw;
+                        }
                     },
                     new McpServerToolCreateOptions
                     {
@@ -41,8 +58,20 @@ internal static class HivesharpMcpToolProvider
                 tools.Add(McpServerTool.Create(
                     async (string? input, CancellationToken cancellationToken) =>
                     {
-                        var result = await workflow.ExecuteAsync(input, cancellationToken);
-                        return new { result.Status, result.Output };
+                        McpLog.WorkflowToolStarted(logger, workflowId);
+                        var sw = Stopwatch.StartNew();
+                        try
+                        {
+                            var result = await workflow.ExecuteAsync(input, cancellationToken);
+                            sw.Stop();
+                            McpLog.WorkflowToolCompleted(logger, workflowId, result.Status.ToString(), sw.ElapsedMilliseconds);
+                            return new { result.Status, result.Output };
+                        }
+                        catch (Exception ex)
+                        {
+                            McpLog.WorkflowToolFailed(logger, ex, workflowId);
+                            throw;
+                        }
                     },
                     new McpServerToolCreateOptions
                     {

@@ -9,6 +9,7 @@ using Hivesharp.Mcp;
 using Hivesharp.Rag;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Hivesharp.Agent.Builder;
 
@@ -18,7 +19,8 @@ internal sealed class AgentBuilder(
     IVectorStore? defaultVectorStore = null,
     ITextEmbedder? defaultTextEmbedder = null,
     IMcpToolResolver? mcpToolResolver = null,
-    IServiceProvider? serviceProvider = null) : IAgentBuilder
+    IServiceProvider? serviceProvider = null,
+    ILoggerFactory? loggerFactory = null) : IAgentBuilder
 {
     private string? _id;
     private string? _modelName;
@@ -163,7 +165,8 @@ internal sealed class AgentBuilder(
         var descriptor = CreateDescriptor();
         var memory = BuildMemoryConfiguration();
 
-        return new global::Hivesharp.Agent.Agent(descriptor, aiTools, chatClient, memory, _mcpServers, mcpToolResolver);
+        var agentLogger = loggerFactory?.CreateLogger<global::Hivesharp.Agent.Agent>();
+        return new global::Hivesharp.Agent.Agent(descriptor, aiTools, chatClient, memory, _mcpServers, mcpToolResolver, agentLogger);
     }
 
     private (List<AITool>?, IChatClient) CreateTools(IChatClient chatClient)
@@ -183,7 +186,11 @@ internal sealed class AgentBuilder(
                 .Cast<AITool>());
         }
 
-        var invokingClient = new TimeoutFunctionInvokingChatClient(chatClient, _maxSteps, TimeSpan.FromSeconds(10));
+        var invokingClient = new TimeoutFunctionInvokingChatClient(
+            chatClient,
+            _maxSteps,
+            TimeSpan.FromSeconds(10),
+            loggerFactory?.CreateLogger<TimeoutFunctionInvokingChatClient>());
 
         return (aiTools.Count > 0 ? aiTools : null, invokingClient);
     }
@@ -245,7 +252,8 @@ internal sealed class AgentBuilder(
             Embedder = embedder,
             IndexName = _vectorQueryToolConfig.IndexName,
             TopK = _vectorQueryToolConfig.TopK,
-            Description = _vectorQueryToolConfig.ToolDescription ?? $"Search the '{_vectorQueryToolConfig.IndexName}' knowledge base for relevant information"
+            Description = _vectorQueryToolConfig.ToolDescription ?? $"Search the '{_vectorQueryToolConfig.IndexName}' knowledge base for relevant information",
+            Logger = loggerFactory?.CreateLogger<VectorQueryTool>()
         };
 
         _tools ??= new Dictionary<string, ITool>();
