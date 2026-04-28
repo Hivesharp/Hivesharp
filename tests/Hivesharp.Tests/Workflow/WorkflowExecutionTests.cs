@@ -190,8 +190,25 @@ public class WorkflowExecutionTests
 
         var result = await wf.ExecuteAsync();
 
-        // The ParallelNode throws InvalidOperationException on Suspend → Workflow catches → Failed
         Assert.Equal(WorkflowStatus.Failed, result.Status);
+    }
+
+    [Fact]
+    public async Task Parallel_With_Suspend_Throws_WorkflowConfigurationException_Naming_Step_And_Group()
+    {
+        var a = Step.Create("a", (object? _) => Task.FromResult<object?>(1));
+        var bad = Step.Create("bad",
+            (object? _, CancellationToken __) => Task.FromResult(StepExecutionResult.Suspend("nope")));
+
+        var node = new ParallelNode("parallel-0", new IStep[] { a, bad });
+        var ctx = new StepContext(new SimpleServiceProvider());
+
+        var ex = await Assert.ThrowsAsync<WorkflowConfigurationException>(async () =>
+            await node.ExecuteAsync(input: null, ctx, CancellationToken.None));
+
+        Assert.Contains("'bad'", ex.Message);
+        Assert.Contains("'parallel-0'", ex.Message);
+        Assert.Contains("https://hivesharp.dev/concepts/workflows#suspend-in-parallel", ex.Message);
     }
 
     private sealed class SimpleServiceProvider : IServiceProvider

@@ -306,7 +306,11 @@ internal class ParallelNode(string id, IReadOnlyList<IStep> steps) : IWorkflowNo
             stepSw.Stop();
 
             if (result.IsSuspended)
-                throw new InvalidOperationException($"Step '{step.Id}' called Suspend inside a parallel group, which is not supported.");
+                throw new WorkflowConfigurationException(
+                    $"Step '{step.Id}' attempted to Suspend inside parallel group '{id}'. " +
+                    $"Suspend is only supported in sequential steps. " +
+                    $"Move the suspending step before or after the parallel block. " +
+                    $"See: https://hivesharp.dev/concepts/workflows#suspend-in-parallel");
 
             return new StepResult
             {
