@@ -8,5 +8,6 @@ public interface IAgent
     AgentRuntimeState RuntimeState { get; }
     MemoryConfiguration? Memory { get; }
     Task<AgentResult> GenerateAsync(string message, string? threadId = null, CancellationToken cancellationToken = default);
+    Task<AgentResult<T>> GenerateAsync<T>(string message, string? threadId = null, CancellationToken cancellationToken = default);
     Task RetryMcpAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

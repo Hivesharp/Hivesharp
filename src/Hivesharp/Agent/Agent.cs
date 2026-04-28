@@ -198,6 +198,111 @@ internal class Agent(
         }
     }
 
+    public async Task<AgentResult<T>> GenerateAsync<T>(string message, string? threadId = null, CancellationToken cancellationToken = default)
+    {
+        await EnsureMcpInitializedAsync(cancellationToken);
+        await AutoRetryFailedMcpAsync(cancellationToken);
+
+        if (Memory?.WorkingMemory is not null)
+            throw new InvalidOperationException(
+                "Structured output (GenerateAsync<T>) is incompatible with working memory; configure agent without WithWorkingMemory() or use the non-generic overload.");
+
+        if (Memory is null)
+            return await GenerateStructuredSimpleAsync<T>(message, cancellationToken);
+
+        if (threadId is null)
+        {
+            var thread = await Memory.Storage.CreateThreadAsync(cancellationToken: cancellationToken);
+            threadId = thread.Id;
+        }
+
+        AgentLog.GenerateStarted(_logger, AgentDescriptor.Id, threadId, message.Length);
+        var sw = Stopwatch.StartNew();
+
+        try
+        {
+            var chatOptions = new ChatOptions
+            {
+                Instructions = BuildInstructions()
+            };
+
+            ApplyTools(chatOptions);
+
+            var messages = await LoadMessageHistoryAsync(threadId, message, cancellationToken);
+
+            if (cancellationToken.IsCancellationRequested)
+                return new AgentResult<T> { Completion = string.Empty, IsValid = false };
+
+            var response = await chatClient.GetResponseAsync<T>(messages, chatOptions, cancellationToken: cancellationToken);
+
+            var rawJson = response.Text ?? string.Empty;
+            var isValid = response.TryGetResult(out var typed);
+
+            await PersistMessagesAsync(threadId, message, rawJson);
+
+            sw.Stop();
+            AgentLog.GenerateCompleted(_logger, AgentDescriptor.Id, threadId,
+                response.Usage?.InputTokenCount ?? 0,
+                response.Usage?.OutputTokenCount ?? 0,
+                sw.ElapsedMilliseconds);
+
+            return new AgentResult<T>
+            {
+                Completion = rawJson,
+                ThreadId = threadId,
+                Usage = response.Usage.MapUsage(),
+                ToolCalls = response.Messages.ExtractToolCalls(),
+                Result = isValid ? typed : default,
+                IsValid = isValid
+            };
+        }
+        catch (Exception ex)
+        {
+            AgentLog.GenerateFailed(_logger, ex, AgentDescriptor.Id);
+            throw;
+        }
+    }
+
+    private async Task<AgentResult<T>> GenerateStructuredSimpleAsync<T>(string message, CancellationToken cancellationToken)
+    {
+        AgentLog.SimpleGenerateStarted(_logger, AgentDescriptor.Id, message.Length);
+        var sw = Stopwatch.StartNew();
+
+        try
+        {
+            var options = new ChatOptions
+            {
+                Instructions = BuildInstructions()
+            };
+
+            ApplyTools(options);
+
+            var response = await chatClient.GetResponseAsync<T>(message, options, cancellationToken: cancellationToken);
+
+            sw.Stop();
+            AgentLog.SimpleGenerateCompleted(_logger, AgentDescriptor.Id,
+                response.Usage?.InputTokenCount ?? 0,
+                response.Usage?.OutputTokenCount ?? 0,
+                sw.ElapsedMilliseconds);
+
+            var isValid = response.TryGetResult(out var typed);
+
+            return new AgentResult<T>
+            {
+                Completion = response.Text ?? string.Empty,
+                Usage = response.Usage.MapUsage(),
+                ToolCalls = response.Messages.ExtractToolCalls(),
+                Result = isValid ? typed : default,
+                IsValid = isValid
+            };
+        }
+        catch (Exception ex)
+        {
+            AgentLog.SimpleGenerateFailed(_logger, ex, AgentDescriptor.Id);
+            throw;
+        }
+    }
+
     private async Task<AgentResult> GenerateSimpleAsync(string message, CancellationToken cancellationToken = default)
     {
         AgentLog.SimpleGenerateStarted(_logger, AgentDescriptor.Id, message.Length);

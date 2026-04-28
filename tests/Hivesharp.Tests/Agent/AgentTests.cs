@@ -169,6 +169,92 @@ public class AgentTests
         Assert.Equal(13, result.Usage.TotalTokens);
     }
 
+    public sealed record Sentiment(string Label, double Confidence);
+
+    [Fact]
+    public async Task Generic_GenerateAsync_Returns_Typed_Result_From_Json_Completion()
+    {
+        var chat = new FakeChatClient
+        {
+            Responder = (_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant,
+                """{"label":"positive","confidence":0.92}"""))
+        };
+
+        var agent = new global::Hivesharp.Agent.Agent(Descriptor(), null, chat);
+
+        var result = await agent.GenerateAsync<Sentiment>("classify");
+
+        Assert.True(result.IsValid);
+        Assert.NotNull(result.Result);
+        Assert.Equal("positive", result.Result!.Label);
+        Assert.Equal(0.92, result.Result.Confidence);
+        Assert.Contains("positive", result.Completion);
+    }
+
+    [Fact]
+    public async Task Generic_GenerateAsync_Returns_Invalid_Result_When_Json_Malformed()
+    {
+        var chat = new FakeChatClient
+        {
+            Responder = (_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant, "not-json-at-all"))
+        };
+
+        var agent = new global::Hivesharp.Agent.Agent(Descriptor(), null, chat);
+
+        var result = await agent.GenerateAsync<Sentiment>("classify");
+
+        Assert.False(result.IsValid);
+        Assert.Null(result.Result);
+        Assert.Equal("not-json-at-all", result.Completion);
+    }
+
+    [Fact]
+    public async Task Generic_GenerateAsync_Persists_Raw_Json_Into_History()
+    {
+        const string json = """{"label":"neutral","confidence":0.5}""";
+        var chat = new FakeChatClient
+        {
+            Responder = (_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant, json))
+        };
+
+        var storage = new InspectableMemoryStorage();
+        var memory = new MemoryConfiguration
+        {
+            Storage = storage,
+            MessageHistory = new MessageHistoryConfiguration { MaxMessages = 10 }
+        };
+
+        var agent = new global::Hivesharp.Agent.Agent(Descriptor(), null, chat, memory);
+
+        var result = await agent.GenerateAsync<Sentiment>("classify", threadId: null);
+
+        Assert.True(result.IsValid);
+        Assert.NotNull(result.ThreadId);
+        var persisted = storage.GetAllMessages(result.ThreadId!);
+        Assert.Equal(2, persisted.Count);
+        Assert.Equal("user", persisted[0].Role);
+        Assert.Equal("classify", persisted[0].Content);
+        Assert.Equal("assistant", persisted[1].Role);
+        Assert.Contains("neutral", persisted[1].Content);
+    }
+
+    [Fact]
+    public async Task Generic_GenerateAsync_Throws_When_Working_Memory_Configured()
+    {
+        var chat = new FakeChatClient();
+        var storage = new InspectableMemoryStorage();
+        var memory = new MemoryConfiguration
+        {
+            Storage = storage,
+            WorkingMemory = new WorkingMemoryConfiguration()
+        };
+
+        var agent = new global::Hivesharp.Agent.Agent(Descriptor(), null, chat, memory);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => agent.GenerateAsync<Sentiment>("hi", threadId: "t1"));
+    }
+
     [Fact]
     public async Task Cancelled_Token_Before_Chat_Returns_Empty_Completion()
     {
