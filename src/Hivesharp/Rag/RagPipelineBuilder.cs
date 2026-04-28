@@ -1,4 +1,5 @@
 using Hivesharp.Abstractions.Rag;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Hivesharp.Rag;
 
@@ -25,11 +26,23 @@ public sealed class RagPipelineBuilder(IServiceProvider serviceProvider)
         return this;
     }
 
+    public RagPipelineBuilder WithVectorStore(Type storeType)
+        => WithVectorStore(Resolve<IVectorStore>(storeType));
+
+    public RagPipelineBuilder WithVectorStore<TStore>() where TStore : class, IVectorStore
+        => WithVectorStore(typeof(TStore));
+
     public RagPipelineBuilder WithEmbedder(ITextEmbedder embedder)
     {
         _embedder = embedder;
         return this;
     }
+
+    public RagPipelineBuilder WithEmbedder(Type embedderType)
+        => WithEmbedder(Resolve<ITextEmbedder>(embedderType));
+
+    public RagPipelineBuilder WithEmbedder<TEmbedder>() where TEmbedder : class, ITextEmbedder
+        => WithEmbedder(typeof(TEmbedder));
 
     public RagPipelineBuilder WithChunking(int chunkSize = 512, int chunkOverlap = 50)
     {
@@ -42,6 +55,20 @@ public sealed class RagPipelineBuilder(IServiceProvider serviceProvider)
     {
         _chunkingStrategy = strategy;
         return this;
+    }
+
+    public RagPipelineBuilder WithChunkingStrategy(Type strategyType)
+        => WithChunkingStrategy(Resolve<IChunkingStrategy>(strategyType));
+
+    public RagPipelineBuilder WithChunkingStrategy<TStrategy>() where TStrategy : class, IChunkingStrategy
+        => WithChunkingStrategy(typeof(TStrategy));
+
+    private T Resolve<T>(Type type) where T : class
+    {
+        if (!typeof(T).IsAssignableFrom(type))
+            throw new ArgumentException($"Type '{type.FullName}' does not implement {typeof(T).Name}.", nameof(type));
+
+        return (T)ActivatorUtilities.GetServiceOrCreateInstance(serviceProvider, type);
     }
 
     internal (IVectorStore vectorStore, ITextEmbedder embedder, IChunkingStrategy chunkingStrategy, string indexName, int dimensions, int chunkSize, int chunkOverlap) Build()

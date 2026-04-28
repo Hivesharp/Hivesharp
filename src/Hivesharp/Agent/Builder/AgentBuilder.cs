@@ -97,6 +97,11 @@ internal sealed class AgentBuilder(
         _messageHistory = new MessageHistoryConfiguration { Storage = storage, MaxMessages = maxMessages ?? 40 };
         return this;
     }
+    public IAgentBuilderSetup WithMessageHistoryMemory(Type storageType, int? maxMessages = null)
+        => WithMessageHistoryMemory(ResolveStorage(storageType), maxMessages);
+    public IAgentBuilderSetup WithMessageHistoryMemory<TStorage>(int? maxMessages = null)
+        where TStorage : class, IMemoryStorage
+        => WithMessageHistoryMemory(typeof(TStorage), maxMessages);
     public IAgentBuilderSetup WithWorkingMemory(string? instructions = null)
     {
         _workingMemory = new WorkingMemoryConfiguration { Instructions = instructions };
@@ -106,6 +111,22 @@ internal sealed class AgentBuilder(
     {
         _workingMemory = new WorkingMemoryConfiguration { Storage = storage, Instructions = instructions };
         return this;
+    }
+    public IAgentBuilderSetup WithWorkingMemory(Type storageType, string? instructions = null)
+        => WithWorkingMemory(ResolveStorage(storageType), instructions);
+    public IAgentBuilderSetup WithWorkingMemory<TStorage>(string? instructions = null)
+        where TStorage : class, IMemoryStorage
+        => WithWorkingMemory(typeof(TStorage), instructions);
+
+    private IMemoryStorage ResolveStorage(Type storageType)
+    {
+        if (!typeof(IMemoryStorage).IsAssignableFrom(storageType))
+            throw new ArgumentException($"Type '{storageType.FullName}' does not implement {nameof(IMemoryStorage)}.", nameof(storageType));
+
+        return serviceProvider is not null
+            ? (IMemoryStorage)ActivatorUtilities.GetServiceOrCreateInstance(serviceProvider, storageType)
+            : (IMemoryStorage)(Activator.CreateInstance(storageType)
+                ?? throw new InvalidOperationException($"Could not activate '{storageType.FullName}'."));
     }
     public IAgentBuilderSetup WithVectorQueryTool(string indexName, string? toolDescription = null, int topK = 5)
     {

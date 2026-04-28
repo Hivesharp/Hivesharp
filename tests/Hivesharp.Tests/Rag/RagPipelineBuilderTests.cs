@@ -95,6 +95,106 @@ public class RagPipelineBuilderTests
         Assert.Equal(200, overlap);
     }
 
+    private sealed class FakeVectorStore : IVectorStore
+    {
+        public Task CreateIndexAsync(string indexName, int dimensions, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<bool> HasIndexAsync(string indexName, CancellationToken ct = default) => Task.FromResult(true);
+        public Task DeleteIndexAsync(string indexName, CancellationToken ct = default) => Task.CompletedTask;
+        public Task UpsertAsync(string indexName, IReadOnlyList<VectorRecord> records, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<VectorSearchResult>> QueryAsync(string indexName, float[] embedding, int topK = 10, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<VectorSearchResult>>([]);
+        public Task DeleteAsync(string indexName, IReadOnlyList<string> ids, CancellationToken ct = default) => Task.CompletedTask;
+    }
+
+    private sealed class FakeEmbedder : ITextEmbedder
+    {
+        public Task<float[]> EmbedAsync(string text, CancellationToken ct = default) => Task.FromResult(new float[1]);
+        public Task<IReadOnlyList<float[]>> EmbedManyAsync(IReadOnlyList<string> texts, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<float[]>>([]);
+    }
+
+    private sealed class FakeChunker : IChunkingStrategy
+    {
+        public IReadOnlyList<RagChunk> Chunk(RagDocument document) => [];
+    }
+
+    [Fact]
+    public void WithVectorStore_Generic_Activates_Type()
+    {
+        var services = new TinyServiceProvider()
+            .Register(typeof(ITextEmbedder), new Mock<ITextEmbedder>().Object);
+
+        var (vectorStore, _, _, _, _, _, _) = new RagPipelineBuilder(services)
+            .WithVectorStore<FakeVectorStore>()
+            .Build();
+
+        Assert.IsType<FakeVectorStore>(vectorStore);
+    }
+
+    [Fact]
+    public void WithVectorStore_Type_Activates_Type()
+    {
+        var services = new TinyServiceProvider()
+            .Register(typeof(ITextEmbedder), new Mock<ITextEmbedder>().Object);
+
+        var (vectorStore, _, _, _, _, _, _) = new RagPipelineBuilder(services)
+            .WithVectorStore(typeof(FakeVectorStore))
+            .Build();
+
+        Assert.IsType<FakeVectorStore>(vectorStore);
+    }
+
+    [Fact]
+    public void WithVectorStore_Type_Invalid_Throws()
+    {
+        var services = new TinyServiceProvider();
+        var builder = new RagPipelineBuilder(services);
+        Assert.Throws<ArgumentException>(() => builder.WithVectorStore(typeof(string)));
+    }
+
+    [Fact]
+    public void WithEmbedder_Generic_Activates_Type()
+    {
+        var services = new TinyServiceProvider()
+            .Register(typeof(IVectorStore), new Mock<IVectorStore>().Object);
+
+        var (_, embedder, _, _, _, _, _) = new RagPipelineBuilder(services)
+            .WithEmbedder<FakeEmbedder>()
+            .Build();
+
+        Assert.IsType<FakeEmbedder>(embedder);
+    }
+
+    [Fact]
+    public void WithEmbedder_Type_Invalid_Throws()
+    {
+        var services = new TinyServiceProvider();
+        var builder = new RagPipelineBuilder(services);
+        Assert.Throws<ArgumentException>(() => builder.WithEmbedder(typeof(string)));
+    }
+
+    [Fact]
+    public void WithChunkingStrategy_Generic_Activates_Type()
+    {
+        var services = new TinyServiceProvider()
+            .Register(typeof(IVectorStore), new Mock<IVectorStore>().Object)
+            .Register(typeof(ITextEmbedder), new Mock<ITextEmbedder>().Object);
+
+        var (_, _, chunker, _, _, _, _) = new RagPipelineBuilder(services)
+            .WithChunkingStrategy<FakeChunker>()
+            .Build();
+
+        Assert.IsType<FakeChunker>(chunker);
+    }
+
+    [Fact]
+    public void WithChunkingStrategy_Type_Invalid_Throws()
+    {
+        var services = new TinyServiceProvider();
+        var builder = new RagPipelineBuilder(services);
+        Assert.Throws<ArgumentException>(() => builder.WithChunkingStrategy(typeof(string)));
+    }
+
     [Fact]
     public void WithChunkingStrategy_Replaces_Default_Chunker()
     {

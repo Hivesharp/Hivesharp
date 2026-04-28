@@ -42,4 +42,13 @@ public static class HivesharpServiceCollectionExtension
         services.AddSingleton<IMemoryStorage, TStorage>();
         return services;
     }
+
+    public static IServiceCollection AddMemoryStorage(this IServiceCollection services, Type storageType)
+    {
+        if (!typeof(IMemoryStorage).IsAssignableFrom(storageType))
+            throw new ArgumentException($"Type '{storageType.FullName}' does not implement {nameof(IMemoryStorage)}.", nameof(storageType));
+
+        services.AddSingleton(typeof(IMemoryStorage), storageType);
+        return services;
+    }
 }

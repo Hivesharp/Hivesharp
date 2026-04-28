@@ -226,6 +226,77 @@ public class AgentBuilderTests
     }
 
     [Fact]
+    public void WithMessageHistoryMemory_Generic_Resolves_Storage_From_DI()
+    {
+        var storage = new FakeMemoryStorage();
+        var factory = new Mock<IAgentBuilderChatClientFactory>();
+        factory.Setup(f => f.GetChatClient(It.IsAny<string>(), It.IsAny<string>())).Returns(new FakeChatClient());
+        var sp = new Mock<IServiceProvider>();
+        sp.Setup(s => s.GetService(typeof(FakeMemoryStorage))).Returns(storage);
+
+        var builder = new AgentBuilder(factory.Object, serviceProvider: sp.Object);
+        builder.WithModel("openai:gpt-4o")
+               .WithMessageHistoryMemory<FakeMemoryStorage>(maxMessages: 7);
+
+        var agent = builder.Build();
+
+        Assert.Same(storage, agent.Memory!.Storage);
+        Assert.Equal(7, agent.Memory.MessageHistory.MaxMessages);
+    }
+
+    [Fact]
+    public void WithMessageHistoryMemory_Type_Overload_Resolves_Same_As_Generic()
+    {
+        var storage = new FakeMemoryStorage();
+        var factory = new Mock<IAgentBuilderChatClientFactory>();
+        factory.Setup(f => f.GetChatClient(It.IsAny<string>(), It.IsAny<string>())).Returns(new FakeChatClient());
+        var sp = new Mock<IServiceProvider>();
+        sp.Setup(s => s.GetService(typeof(FakeMemoryStorage))).Returns(storage);
+
+        var builder = new AgentBuilder(factory.Object, serviceProvider: sp.Object);
+        builder.WithModel("openai:gpt-4o")
+               .WithMessageHistoryMemory(typeof(FakeMemoryStorage), maxMessages: 9);
+
+        var agent = builder.Build();
+
+        Assert.Same(storage, agent.Memory!.Storage);
+        Assert.Equal(9, agent.Memory.MessageHistory.MaxMessages);
+    }
+
+    [Fact]
+    public void WithMessageHistoryMemory_Type_Invalid_Throws()
+    {
+        var builder = CreateBuilder();
+        Assert.Throws<ArgumentException>(() => builder.WithMessageHistoryMemory(typeof(NotATool)));
+    }
+
+    [Fact]
+    public void WithWorkingMemory_Generic_Resolves_Storage_From_DI()
+    {
+        var storage = new FakeMemoryStorage();
+        var factory = new Mock<IAgentBuilderChatClientFactory>();
+        factory.Setup(f => f.GetChatClient(It.IsAny<string>(), It.IsAny<string>())).Returns(new FakeChatClient());
+        var sp = new Mock<IServiceProvider>();
+        sp.Setup(s => s.GetService(typeof(FakeMemoryStorage))).Returns(storage);
+
+        var builder = new AgentBuilder(factory.Object, serviceProvider: sp.Object);
+        builder.WithModel("openai:gpt-4o")
+               .WithWorkingMemory<FakeMemoryStorage>(instructions: "Track.");
+
+        var agent = builder.Build();
+
+        Assert.Same(storage, agent.Memory!.Storage);
+        Assert.Equal("Track.", agent.Memory.WorkingMemory!.Instructions);
+    }
+
+    [Fact]
+    public void WithWorkingMemory_Type_Invalid_Throws()
+    {
+        var builder = CreateBuilder();
+        Assert.Throws<ArgumentException>(() => builder.WithWorkingMemory(typeof(NotATool)));
+    }
+
+    [Fact]
     public void McpServer_Without_Resolver_Throws()
     {
         var builder = CreateBuilder();

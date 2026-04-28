@@ -14,10 +14,28 @@ public static class RagServiceCollectionExtension
         return services;
     }
 
+    public static IServiceCollection AddVectorStore(this IServiceCollection services, Type storeType)
+    {
+        if (!typeof(IVectorStore).IsAssignableFrom(storeType))
+            throw new ArgumentException($"Type '{storeType.FullName}' does not implement {nameof(IVectorStore)}.", nameof(storeType));
+
+        services.AddSingleton(typeof(IVectorStore), storeType);
+        return services;
+    }
+
     public static IServiceCollection AddTextEmbedder<TEmbedder>(this IServiceCollection services)
         where TEmbedder : class, ITextEmbedder
     {
         services.AddSingleton<ITextEmbedder, TEmbedder>();
+        return services;
+    }
+
+    public static IServiceCollection AddTextEmbedder(this IServiceCollection services, Type embedderType)
+    {
+        if (!typeof(ITextEmbedder).IsAssignableFrom(embedderType))
+            throw new ArgumentException($"Type '{embedderType.FullName}' does not implement {nameof(ITextEmbedder)}.", nameof(embedderType));
+
+        services.AddSingleton(typeof(ITextEmbedder), embedderType);
         return services;
     }
 
