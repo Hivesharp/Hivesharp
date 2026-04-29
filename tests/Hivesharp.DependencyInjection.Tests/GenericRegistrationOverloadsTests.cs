@@ -31,7 +31,7 @@ public class GenericRegistrationOverloadsTests
         public Task<bool> HasIndexAsync(string indexName, CancellationToken ct = default) => Task.FromResult(false);
         public Task DeleteIndexAsync(string indexName, CancellationToken ct = default) => Task.CompletedTask;
         public Task UpsertAsync(string indexName, IReadOnlyList<VectorRecord> records, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<IReadOnlyList<VectorSearchResult>> QueryAsync(string indexName, float[] queryEmbedding, int topK = 10, CancellationToken ct = default)
+        public Task<IReadOnlyList<VectorSearchResult>> QueryAsync(string indexName, float[] queryEmbedding, int topK = 10, IReadOnlyDictionary<string, object?>? filter = null, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<VectorSearchResult>>([]);
         public Task DeleteAsync(string indexName, IReadOnlyList<string> ids, CancellationToken ct = default) => Task.CompletedTask;
     }

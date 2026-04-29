@@ -130,9 +130,18 @@ internal sealed class AgentBuilder(
             : (IMemoryStorage)(Activator.CreateInstance(storageType)
                 ?? throw new InvalidOperationException($"Could not activate '{storageType.FullName}'."));
     }
-    public IAgentBuilderSetup WithVectorQueryTool(string indexName, string? toolDescription = null, int topK = 5)
+    public IAgentBuilderSetup WithVectorQueryTool(string indexName, string? toolDescription = null, int topK = 5, IReadOnlyDictionary<string, object?>? filter = null)
     {
-        _vectorQueryToolConfig = new VectorQueryToolConfig(indexName, toolDescription, topK);
+        if (filter is not null)
+        {
+            foreach (var key in filter.Keys)
+            {
+                if (string.IsNullOrWhiteSpace(key))
+                    throw new ArgumentException("Metadata filter keys must be non-empty.", nameof(filter));
+            }
+        }
+
+        _vectorQueryToolConfig = new VectorQueryToolConfig(indexName, toolDescription, topK, filter);
         return this;
     }
     public IAgentBuilderSetup WithMcpServer(string name, Uri httpEndpoint)
@@ -252,6 +261,7 @@ internal sealed class AgentBuilder(
             Embedder = embedder,
             IndexName = _vectorQueryToolConfig.IndexName,
             TopK = _vectorQueryToolConfig.TopK,
+            Filter = _vectorQueryToolConfig.Filter,
             Description = _vectorQueryToolConfig.ToolDescription ?? $"Search the '{_vectorQueryToolConfig.IndexName}' knowledge base for relevant information",
             Logger = loggerFactory?.CreateLogger<VectorQueryTool>()
         };
@@ -268,4 +278,4 @@ internal sealed class AgentBuilder(
     }
 }
 
-internal sealed record VectorQueryToolConfig(string IndexName, string? ToolDescription, int TopK = 5);
+internal sealed record VectorQueryToolConfig(string IndexName, string? ToolDescription, int TopK = 5, IReadOnlyDictionary<string, object?>? Filter = null);

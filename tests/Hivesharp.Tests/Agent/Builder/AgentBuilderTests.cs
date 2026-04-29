@@ -143,6 +143,15 @@ public class AgentBuilderTests
     }
 
     [Fact]
+    public void WithVectorQueryTool_Empty_Filter_Key_Throws()
+    {
+        var builder = CreateBuilder();
+        builder.WithModel("openai:gpt-4o");
+        Assert.Throws<ArgumentException>(() =>
+            builder.WithVectorQueryTool("kb", filter: new Dictionary<string, object?> { ["  "] = "x" }));
+    }
+
+    [Fact]
     public void WithMaxSteps_Zero_Throws()
     {
         var builder = CreateBuilder();

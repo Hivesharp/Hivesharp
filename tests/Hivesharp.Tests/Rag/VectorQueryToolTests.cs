@@ -30,7 +30,7 @@ public class VectorQueryToolTests
                 .ReturnsAsync(new float[] { 1f });
 
         var store = new Mock<IVectorStore>();
-        store.Setup(s => s.QueryAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        store.Setup(s => s.QueryAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<IReadOnlyDictionary<string, object?>?>(), It.IsAny<CancellationToken>()))
              .ReturnsAsync([]);
 
         var tool = Make(store.Object, embedder.Object);
@@ -49,7 +49,7 @@ public class VectorQueryToolTests
                 .ReturnsAsync(new float[] { 0.5f });
 
         var store = new Mock<IVectorStore>();
-        store.Setup(s => s.QueryAsync("kb", It.IsAny<float[]>(), 5, It.IsAny<CancellationToken>()))
+        store.Setup(s => s.QueryAsync("kb", It.IsAny<float[]>(), 5, It.IsAny<IReadOnlyDictionary<string, object?>?>(), It.IsAny<CancellationToken>()))
              .ReturnsAsync(
              [
                  new VectorSearchResult { Id = "1", Text = "first", Score = 0.9 },
@@ -72,7 +72,7 @@ public class VectorQueryToolTests
                 .ReturnsAsync(new float[] { 1f });
 
         var store = new Mock<IVectorStore>();
-        store.Setup(s => s.QueryAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        store.Setup(s => s.QueryAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<IReadOnlyDictionary<string, object?>?>(), It.IsAny<CancellationToken>()))
              .ReturnsAsync([]);
 
         var tool = Make(store.Object, embedder.Object, topK: 3);
@@ -80,7 +80,7 @@ public class VectorQueryToolTests
 
         await del("anything");
 
-        store.Verify(s => s.QueryAsync("kb", It.IsAny<float[]>(), 3, It.IsAny<CancellationToken>()), Times.Once);
+        store.Verify(s => s.QueryAsync("kb", It.IsAny<float[]>(), 3, It.IsAny<IReadOnlyDictionary<string, object?>?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public class VectorQueryToolTests
                 .ReturnsAsync(new float[] { 0.1f });
 
         var store = new Mock<IVectorStore>();
-        store.Setup(s => s.QueryAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        store.Setup(s => s.QueryAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<IReadOnlyDictionary<string, object?>?>(), It.IsAny<CancellationToken>()))
              .ReturnsAsync([]);
 
         var tool = Make(store.Object, embedder.Object);

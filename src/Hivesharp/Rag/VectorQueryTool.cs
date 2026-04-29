@@ -12,6 +12,7 @@ internal sealed class VectorQueryTool : ITool
     internal required ITextEmbedder Embedder { get; init; }
     internal required string IndexName { get; init; }
     internal int TopK { get; init; } = 5;
+    internal IReadOnlyDictionary<string, object?>? Filter { get; init; }
     internal ILogger? Logger { get; init; }
 
     public string Name => "vector_query";
@@ -21,7 +22,7 @@ internal sealed class VectorQueryTool : ITool
     {
         var logger = Logger ?? NullLogger.Instance;
         var embedding = await Embedder.EmbedAsync(query);
-        var results = await VectorStore.QueryAsync(IndexName, embedding, TopK);
+        var results = await VectorStore.QueryAsync(IndexName, embedding, TopK, Filter);
 
         RagLog.VectorQuery(logger, IndexName, TopK, query.Length, results.Count);
 

@@ -346,7 +346,7 @@ internal static class HivesharpStudioEndpoints
                     return Results.Json(new { error = "IVectorStore and ITextEmbedder must be registered." }, statusCode: 400);
 
                 var embedding = await embedder.EmbedAsync(request.Query, cancellationToken);
-                var results = await vectorStore.QueryAsync(indexName, embedding, request.TopK ?? 5, cancellationToken);
+                var results = await vectorStore.QueryAsync(indexName, embedding, request.TopK ?? 5, cancellationToken: cancellationToken);
 
                 return Results.Ok(results);
             }

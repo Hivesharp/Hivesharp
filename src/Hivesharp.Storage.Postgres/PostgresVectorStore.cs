@@ -28,6 +28,11 @@ internal sealed class PostgresVectorStore(
             );
             """;
 
+        var metadataIndexDdl = $"""
+            CREATE INDEX IF NOT EXISTS "{tables.IndexName(tableUq, "metadata_gin")}"
+                ON {table} USING gin (metadata jsonb_path_ops);
+            """;
+
         var indexDdl = options.VectorIndex switch
         {
             PostgresVectorIndexKind.Hnsw =>
@@ -46,7 +51,7 @@ internal sealed class PostgresVectorStore(
         };
 
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        await using var cmd = new NpgsqlCommand(ddl + "\n" + indexDdl, connection);
+        await using var cmd = new NpgsqlCommand(ddl + "\n" + indexDdl + "\n" + metadataIndexDdl, connection);
         await cmd.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -112,15 +117,19 @@ internal sealed class PostgresVectorStore(
     }
 
     public async Task<IReadOnlyList<VectorSearchResult>> QueryAsync(
-        string indexName, float[] queryEmbedding, int topK = 10, CancellationToken cancellationToken = default)
+        string indexName, float[] queryEmbedding, int topK = 10, IReadOnlyDictionary<string, object?>? filter = null, CancellationToken cancellationToken = default)
     {
         var table = tables.VectorTable(indexName);
+        var hasFilter = filter is { Count: > 0 };
 
         // <=> is the cosine distance operator. Score = 1 - distance, so higher is better
         // (matches InMemoryVectorStore.CosineSimilarity semantics).
+        // metadata @> @filter::jsonb is a JSONB containment match -- AND-equality across keys.
+        var whereClause = hasFilter ? "WHERE metadata @> @filter::jsonb" : string.Empty;
         var sql = $"""
             SELECT id, text, metadata, 1 - (embedding <=> @query) AS score
             FROM {table}
+            {whereClause}
             ORDER BY embedding <=> @query
             LIMIT @topK;
             """;
@@ -129,6 +138,13 @@ internal sealed class PostgresVectorStore(
         await using var cmd = new NpgsqlCommand(sql, connection);
         cmd.Parameters.AddWithValue("query", new Vector(queryEmbedding));
         cmd.Parameters.AddWithValue("topK", topK);
+        if (hasFilter)
+        {
+            cmd.Parameters.Add(new NpgsqlParameter("filter", NpgsqlDbType.Jsonb)
+            {
+                Value = JsonSerializer.Serialize(filter)
+            });
+        }
 
         var results = new List<VectorSearchResult>(topK);
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);

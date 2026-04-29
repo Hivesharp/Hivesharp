@@ -35,12 +35,13 @@ public class InMemoryVectorStore : IVectorStore
         return Task.CompletedTask;
     }
 
-    public Task<IReadOnlyList<VectorSearchResult>> QueryAsync(string indexName, float[] queryEmbedding, int topK = 10, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<VectorSearchResult>> QueryAsync(string indexName, float[] queryEmbedding, int topK = 10, IReadOnlyDictionary<string, object?>? filter = null, CancellationToken cancellationToken = default)
     {
         if (!_indexes.TryGetValue(indexName, out var index))
             return Task.FromResult<IReadOnlyList<VectorSearchResult>>([]);
 
         var results = index.Values
+            .Where(record => Matches(record.Metadata, filter))
             .Select(record => new { Record = record, Score = CosineSimilarity(queryEmbedding, record.Embedding) })
             .OrderByDescending(x => x.Score)
             .Take(topK)
@@ -54,6 +55,17 @@ public class InMemoryVectorStore : IVectorStore
             .ToList();
 
         return Task.FromResult<IReadOnlyList<VectorSearchResult>>(results);
+    }
+
+    private static bool Matches(IReadOnlyDictionary<string, object?> metadata, IReadOnlyDictionary<string, object?>? filter)
+    {
+        if (filter is null || filter.Count == 0) return true;
+        foreach (var (key, expected) in filter)
+        {
+            if (!metadata.TryGetValue(key, out var actual)) return false;
+            if (!Equals(actual, expected)) return false;
+        }
+        return true;
     }
 
     public Task DeleteAsync(string indexName, IReadOnlyList<string> ids, CancellationToken cancellationToken = default)

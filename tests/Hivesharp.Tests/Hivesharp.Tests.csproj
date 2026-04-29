@@ -19,6 +19,7 @@
     <ItemGroup>
         <ProjectReference Include="..\..\src\Hivesharp\Hivesharp.csproj" />
         <ProjectReference Include="..\..\src\Hivesharp.Abstractions\Hivesharp.Abstractions.csproj" />
+        <ProjectReference Include="..\..\src\Hivesharp.Storage.InMemory\Hivesharp.Storage.InMemory.csproj" />
     </ItemGroup>
 
 </Project>
