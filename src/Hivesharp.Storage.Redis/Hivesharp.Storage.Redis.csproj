@@ -11,6 +11,11 @@
     </ItemGroup>
 
     <ItemGroup>
+      <InternalsVisibleTo Include="Hivesharp.Tests" />
+      <InternalsVisibleTo Include="Hivesharp.IntegrationTests.Storage.Redis" />
+    </ItemGroup>
+
+    <ItemGroup>
       <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
       <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.0" />
       <PackageReference Include="StackExchange.Redis" Version="2.8.16" />

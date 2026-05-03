@@ -18,4 +18,9 @@
       <PackageReference Include="Pgvector" Version="0.3.2" />
     </ItemGroup>
 
+    <ItemGroup>
+      <InternalsVisibleTo Include="Hivesharp.Tests" />
+      <InternalsVisibleTo Include="Hivesharp.IntegrationTests.Storage.Postgres" />
+    </ItemGroup>
+
 </Project>

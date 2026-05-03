@@ -9,6 +9,7 @@ internal sealed class PostgresWorkflowRunStore(NpgsqlDataSource dataSource, Post
 {
     public async Task SaveSnapshotAsync(WorkflowSnapshot snapshot, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var sql = $"""
             INSERT INTO {tables.WorkflowRunsTable()} (run_id, workflow_id, snapshot, created_at)
             VALUES (@run_id, @workflow_id, @snapshot, @created_at)
@@ -32,6 +33,7 @@ internal sealed class PostgresWorkflowRunStore(NpgsqlDataSource dataSource, Post
 
     public async Task<WorkflowSnapshot?> GetSnapshotAsync(string runId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var sql = $"SELECT snapshot FROM {tables.WorkflowRunsTable()} WHERE run_id = @run_id;";
 
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -45,6 +47,7 @@ internal sealed class PostgresWorkflowRunStore(NpgsqlDataSource dataSource, Post
 
     public async Task DeleteSnapshotAsync(string runId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var sql = $"DELETE FROM {tables.WorkflowRunsTable()} WHERE run_id = @run_id;";
 
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -56,6 +59,7 @@ internal sealed class PostgresWorkflowRunStore(NpgsqlDataSource dataSource, Post
     public async Task<IReadOnlyList<WorkflowSnapshot>> GetSnapshotsByWorkflowAsync(
         string workflowId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var sql = $"""
             SELECT snapshot
             FROM {tables.WorkflowRunsTable()}

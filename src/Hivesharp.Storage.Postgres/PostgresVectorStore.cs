@@ -13,6 +13,7 @@ internal sealed class PostgresVectorStore(
 {
     public async Task CreateIndexAsync(string indexName, int dimensions, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (dimensions <= 0)
             throw new ArgumentOutOfRangeException(nameof(dimensions), "Dimensions must be positive.");
 
@@ -57,6 +58,7 @@ internal sealed class PostgresVectorStore(
 
     public async Task<bool> HasIndexAsync(string indexName, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         PostgresTableBuilder.ValidateIdentifier(indexName, nameof(indexName));
         var tableUq = tables.VectorTableUnqualified(indexName);
 
@@ -77,6 +79,7 @@ internal sealed class PostgresVectorStore(
 
     public async Task DeleteIndexAsync(string indexName, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var table = tables.VectorTable(indexName);
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var cmd = new NpgsqlCommand($"DROP TABLE IF EXISTS {table};", connection);
@@ -85,6 +88,7 @@ internal sealed class PostgresVectorStore(
 
     public async Task UpsertAsync(string indexName, IReadOnlyList<VectorRecord> records, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (records.Count == 0) return;
 
         var table = tables.VectorTable(indexName);
@@ -119,6 +123,7 @@ internal sealed class PostgresVectorStore(
     public async Task<IReadOnlyList<VectorSearchResult>> QueryAsync(
         string indexName, float[] queryEmbedding, int topK = 10, IReadOnlyDictionary<string, object?>? filter = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var table = tables.VectorTable(indexName);
         var hasFilter = filter is { Count: > 0 };
 
@@ -173,6 +178,7 @@ internal sealed class PostgresVectorStore(
 
     public async Task DeleteAsync(string indexName, IReadOnlyList<string> ids, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (ids.Count == 0) return;
 
         var table = tables.VectorTable(indexName);

@@ -10,6 +10,7 @@ internal sealed class RedisWorkflowRunStore(IConnectionMultiplexer multiplexer, 
 
     public async Task SaveSnapshotAsync(WorkflowSnapshot snapshot, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var payload = JsonSerializer.Serialize(snapshot);
 
         var db = Db;
@@ -24,6 +25,7 @@ internal sealed class RedisWorkflowRunStore(IConnectionMultiplexer multiplexer, 
 
     public async Task<WorkflowSnapshot?> GetSnapshotAsync(string runId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var value = await Db.StringGetAsync(keys.WorkflowRun(runId));
         if (!value.HasValue) return null;
         return JsonSerializer.Deserialize<WorkflowSnapshot>((string)value!);
@@ -31,6 +33,7 @@ internal sealed class RedisWorkflowRunStore(IConnectionMultiplexer multiplexer, 
 
     public async Task DeleteSnapshotAsync(string runId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var db = Db;
         var snapshot = await GetSnapshotAsync(runId, cancellationToken);
 
@@ -45,6 +48,7 @@ internal sealed class RedisWorkflowRunStore(IConnectionMultiplexer multiplexer, 
 
     public async Task<IReadOnlyList<WorkflowSnapshot>> GetSnapshotsByWorkflowAsync(string workflowId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var db = Db;
         var ids = await db.SortedSetRangeByScoreAsync(
             keys.WorkflowRunsIndex(workflowId),

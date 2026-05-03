@@ -13,5 +13,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Hivesharp.DependencyInjection.Tests/Hivesharp.DependencyInjection.Tests.csproj" />
     <Project Path="tests/Hivesharp.Tests/Hivesharp.Tests.csproj" />
+    <Project Path="tests/Hivesharp.IntegrationTests.Storage.Postgres/Hivesharp.IntegrationTests.Storage.Postgres.csproj" />
+    <Project Path="tests/Hivesharp.IntegrationTests.Storage.Redis/Hivesharp.IntegrationTests.Storage.Redis.csproj" />
   </Folder>
 </Solution>

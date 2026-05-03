@@ -8,6 +8,7 @@ internal sealed class PostgresMemoryStorage(NpgsqlDataSource dataSource, Postgre
     public async Task<MemoryThread> CreateThreadAsync(
         string? resourceId = null, string? title = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var thread = new MemoryThread
         {
             Id = Guid.NewGuid().ToString(),
@@ -34,6 +35,7 @@ internal sealed class PostgresMemoryStorage(NpgsqlDataSource dataSource, Postgre
 
     public async Task<MemoryThread?> GetThreadAsync(string threadId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var sql = $"""
             SELECT id, resource_id, title, created_at
             FROM {tables.ThreadsTable()}
@@ -54,6 +56,7 @@ internal sealed class PostgresMemoryStorage(NpgsqlDataSource dataSource, Postgre
     public async Task<IReadOnlyList<MemoryThread>> GetThreadsByResourceAsync(
         string resourceId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var sql = $"""
             SELECT id, resource_id, title, created_at
             FROM {tables.ThreadsTable()}
@@ -75,6 +78,7 @@ internal sealed class PostgresMemoryStorage(NpgsqlDataSource dataSource, Postgre
 
     public async Task DeleteThreadAsync(string threadId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         // Cascading FKs on messages and working_memory take care of related rows.
         var sql = $"DELETE FROM {tables.ThreadsTable()} WHERE id = @id;";
 
@@ -87,6 +91,7 @@ internal sealed class PostgresMemoryStorage(NpgsqlDataSource dataSource, Postgre
     public async Task SaveMessagesAsync(
         string threadId, IReadOnlyList<MemoryMessage> messages, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (messages.Count == 0) return;
 
         var sql = $"""
@@ -114,6 +119,7 @@ internal sealed class PostgresMemoryStorage(NpgsqlDataSource dataSource, Postgre
     public async Task<IReadOnlyList<MemoryMessage>> GetMessagesAsync(
         string threadId, int? limit = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         // For the "last N" semantics we sort DESC + LIMIT, then reverse to chronological order.
         var sql = limit.HasValue
             ? $"""
@@ -156,6 +162,7 @@ internal sealed class PostgresMemoryStorage(NpgsqlDataSource dataSource, Postgre
 
     public async Task<string?> GetWorkingMemoryAsync(string threadId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var sql = $"SELECT content FROM {tables.WorkingMemoryTable()} WHERE thread_id = @thread_id;";
 
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -167,6 +174,7 @@ internal sealed class PostgresMemoryStorage(NpgsqlDataSource dataSource, Postgre
 
     public async Task SaveWorkingMemoryAsync(string threadId, string content, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var sql = $"""
             INSERT INTO {tables.WorkingMemoryTable()} (thread_id, content, updated_at)
             VALUES (@thread_id, @content, @updated_at)

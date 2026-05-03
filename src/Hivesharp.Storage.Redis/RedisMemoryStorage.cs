@@ -10,6 +10,8 @@ internal sealed class RedisMemoryStorage(IConnectionMultiplexer multiplexer, Red
 
     public async Task<MemoryThread> CreateThreadAsync(string? resourceId = null, string? title = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var thread = new MemoryThread
         {
             Id = Guid.NewGuid().ToString(),
@@ -40,12 +42,14 @@ internal sealed class RedisMemoryStorage(IConnectionMultiplexer multiplexer, Red
 
     public async Task<MemoryThread?> GetThreadAsync(string threadId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var hash = await Db.HashGetAllAsync(keys.Thread(threadId));
         return ToThread(hash);
     }
 
     public async Task<IReadOnlyList<MemoryThread>> GetThreadsByResourceAsync(string resourceId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var db = Db;
         var ids = await db.SortedSetRangeByScoreAsync(
             keys.ResourceThreadsIndex(resourceId),
@@ -67,6 +71,7 @@ internal sealed class RedisMemoryStorage(IConnectionMultiplexer multiplexer, Red
 
     public async Task DeleteThreadAsync(string threadId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var db = Db;
         var resourceIdValue = await db.HashGetAsync(keys.Thread(threadId), "resourceId");
 
@@ -83,6 +88,7 @@ internal sealed class RedisMemoryStorage(IConnectionMultiplexer multiplexer, Red
 
     public async Task SaveMessagesAsync(string threadId, IReadOnlyList<MemoryMessage> messages, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (messages.Count == 0) return;
 
         var values = new RedisValue[messages.Count];
@@ -96,6 +102,7 @@ internal sealed class RedisMemoryStorage(IConnectionMultiplexer multiplexer, Red
 
     public async Task<IReadOnlyList<MemoryMessage>> GetMessagesAsync(string threadId, int? limit = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var key = keys.ThreadMessages(threadId);
         RedisValue[] values = limit.HasValue
             ? await Db.ListRangeAsync(key, -limit.Value, -1)
@@ -115,12 +122,14 @@ internal sealed class RedisMemoryStorage(IConnectionMultiplexer multiplexer, Red
 
     public async Task<string?> GetWorkingMemoryAsync(string threadId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var value = await Db.StringGetAsync(keys.ThreadWorkingMemory(threadId));
         return value.HasValue ? value.ToString() : null;
     }
 
     public async Task SaveWorkingMemoryAsync(string threadId, string content, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         await Db.StringSetAsync(keys.ThreadWorkingMemory(threadId), content);
     }
 
